@@ -497,6 +497,7 @@ export class VideoQueries {
         });
       }
     }
+    if (entries.length === 0) return;
     return db
       .insertInto("ner_prediction")
       .values(entries)
