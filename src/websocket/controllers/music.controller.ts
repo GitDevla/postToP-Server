@@ -169,9 +169,9 @@ async function startedListeningToMusicWebsocketHandler(ws: ExtendedWebSocketConn
   if (isMusic.is_music) {
     (async () => {
       // the evesdroppers don't need to wait for genre prediction
-      const genres = await MusicService.getGenres(videoID);
-      responseVideo.genres = genres as any;
-      updateClientWithMusicData(ws, responseVideo);
+      // const genres = await MusicService.getGenres(videoID);
+      // responseVideo.genres = genres as any;
+      // updateClientWithMusicData(ws, responseVideo);
     })();
     NER = await MusicService.getEntitiesInMusic(videoID);
     responseVideo.NER = NER as any;
