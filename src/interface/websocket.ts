@@ -37,6 +37,7 @@ export interface ExtendedWebSocketConnection extends WebSocket {
   phase: WebSocketPhase;
   authenticated: boolean;
   disconnectTimeout?: NodeJS.Timeout;
+  idleTimeout?: NodeJS.Timeout;
   currentlyPlayingData?: {
     video: VideoResponseData;
     listeningData: ListeningData;

@@ -12,6 +12,18 @@ import {VideoService} from "../../services/video.service";
 import {logger} from "../../utils/logger";
 import {announceSongToEvedroppers} from "./misc.controller";
 
+const IDLE_CLEAR_MS = 60_000;
+
+function scheduleIdleClear(ws: ExtendedWebSocketConnection) {
+  clearTimeout(ws.idleTimeout);
+  ws.idleTimeout = setTimeout(() => {
+    ws.currentlyPlayingData = undefined;
+    if (ws.userId === undefined) return;
+    announceSongToEvedroppers(ws.userId);
+    logger.info(`Cleared idle playback for user ${ws.userId}`);
+  }, IDLE_CLEAR_MS);
+}
+
 export function videoUpdateWebsocketHandler(ws: ExtendedWebSocketConnection, data: VideoRequestData) {
   if (!ws.authenticated || ws.userId === undefined) {
     ws.send(
@@ -27,23 +39,36 @@ export function videoUpdateWebsocketHandler(ws: ExtendedWebSocketConnection, dat
   const videoStatus = data.status;
   switch (videoStatus) {
     case VideoStatus.STARTED:
+      clearTimeout(ws.idleTimeout);
       startedListeningToMusicWebsocketHandler(ws, data);
       break;
     case VideoStatus.PLAYING:
     case VideoStatus.PAUSED:
-      if (ws.currentlyPlayingData === undefined) return;
+      if (ws.currentlyPlayingData === undefined) {
+        if (videoStatus === VideoStatus.PLAYING) {
+          clearTimeout(ws.idleTimeout);
+          startedListeningToMusicWebsocketHandler(ws, data);
+        }
+        return;
+      }
       if (ws.currentlyPlayingData.video.isMusic === undefined) return;
       if (ws.currentlyPlayingData.video.isMusic.is_music === false) return;
       ws.currentlyPlayingData.listeningData.currentTime = data.currentTime;
       ws.currentlyPlayingData.listeningData.status = data.status;
       ws.currentlyPlayingData.listeningData.updatedAt = new Date();
+      if (videoStatus === VideoStatus.PLAYING) {
+        clearTimeout(ws.idleTimeout);
+      } else {
+        scheduleIdleClear(ws);
+      }
       announceSongToEvedroppers(ws.userId);
       break;
     case VideoStatus.ENDED:
+      scheduleIdleClear(ws);
       listenedToMusicWebsocketHandler(ws, data);
       break;
     default:
-      // assume aborted
+      clearTimeout(ws.idleTimeout);
       ws.currentlyPlayingData = undefined;
       announceSongToEvedroppers(ws.userId);
       break;
