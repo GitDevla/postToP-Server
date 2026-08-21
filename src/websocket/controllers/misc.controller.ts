@@ -2,7 +2,7 @@ import {WebSocket} from "ws";
 import {UserQueries} from "../../database/queries/user.queries";
 import {type ExtendedWebSocketConnection, ResponseOperationType, WebSocketPhase} from "../../interface/websocket";
 import {logger} from "../../utils/logger";
-import {wssServer} from "..";
+import {findAuthenticatedConnection, wssServer} from "..";
 
 export function heartbeatWebsocketHandler(ws: ExtendedWebSocketConnection, _data: any) {
   if (!ws.authenticated || ws.userId === undefined) {
@@ -25,10 +25,7 @@ export function heartbeatWebsocketHandler(ws: ExtendedWebSocketConnection, _data
 // TODO: Replace this with some kind of event system or pub/sub pattern
 // but this is fine for now
 export function announceSongToEvedroppers(userID: number) {
-  const originalWS = Array.from(wssServer.clients).find(client => {
-    const eClient = client as ExtendedWebSocketConnection;
-    return eClient.userId === userID && eClient.phase === WebSocketPhase.CONNECTED && eClient.authenticated;
-  }) as ExtendedWebSocketConnection | undefined;
+  const originalWS = findAuthenticatedConnection(userID);
 
   let data;
   if (
@@ -89,10 +86,7 @@ export async function eavesdropWebsocketHandler(ws: ExtendedWebSocketConnection,
       d: {message: "Eavesdropping started"},
     }),
   );
-  const originalWS = Array.from(wssServer.clients).find(client => {
-    const eClient = client as ExtendedWebSocketConnection;
-    return eClient.userId === ws.userId && eClient.phase === WebSocketPhase.CONNECTED && eClient.authenticated;
-  }) as ExtendedWebSocketConnection | undefined;
+  const originalWS = findAuthenticatedConnection(ws.userId);
   if (!originalWS?.currentlyPlayingData) return;
   if (
     originalWS.currentlyPlayingData.video.isMusic === undefined ||

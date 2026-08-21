@@ -106,3 +106,10 @@ export function addWebsocketUpgradeHandler(server: Server, wss: WebSocketServer)
     });
   });
 }
+
+export function findAuthenticatedConnection(userId: number) {
+  return Array.from(wssServer.clients).find(client => {
+    const eClient = client as ExtendedWebSocketConnection;
+    return eClient.userId === userId && eClient.phase === WebSocketPhase.CONNECTED && eClient.authenticated;
+  }) as ExtendedWebSocketConnection | undefined;
+}
