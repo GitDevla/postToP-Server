@@ -81,7 +81,7 @@ async function webSocketMessageHandler(ws: ExtendedWebSocketConnection, message:
   try {
     await operations[phase][operation](ws, data);
   } catch (error) {
-    logger.error(`Error processing operation ${operation} for userId ${ws.userId}:`, error);
+    logger.error({err: error}, `Error processing operation ${operation} for userId ${ws.userId}`);
     ws.send(
       JSON.stringify({
         op: ResponseOperationType.ERROR,
@@ -92,7 +92,7 @@ async function webSocketMessageHandler(ws: ExtendedWebSocketConnection, message:
 }
 
 function webSocketErrorHandler(error: Error) {
-  logger.error("WebSocket error:", error);
+  logger.error({err: error}, "WebSocket error");
 }
 
 function webSocketCloseHandler(ws: ExtendedWebSocketConnection) {

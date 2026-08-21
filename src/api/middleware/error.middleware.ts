@@ -10,7 +10,7 @@ export function processErrorMiddleware(err: Error, _req: Request, res: Response,
     return;
   }
   if (err instanceof ExpectedError) {
-    logger.warn(err.message, "Expected server error:");
+    logger.warn({err}, "Expected server error");
     res.status(500).json({message: "Internal Server Error"});
     return;
   }
