@@ -51,24 +51,7 @@ export class UserQueries {
         join.onRef("v.id", "=", "video_metadata.video_id").onRef("default_language", "=", "video_metadata.language"),
       )
       .innerJoin("channel as c", "v.channel_id", "c.id")
-      .innerJoin("video_category as vc", "v.id", "vc.video_id")
-      .innerJoin("category as cat", "vc.category_id", "cat.id")
-      .leftJoin("genre_prediction as gp", "v.id", "gp.video_id")
-      .leftJoin(
-        db
-          .selectFrom(
-            db
-              .selectFrom("ner_prediction")
-              .select(["video_id", "entity_type", sql`jsonb_agg(entity_value)`.as("entity_values")])
-              .groupBy(["video_id", "entity_type"])
-              .as("inner_agg"),
-          )
-          .select(["video_id", sql`jsonb_object_agg(entity_type, entity_values)`.as("ner_result")])
-          .groupBy("video_id")
-          .as("ner"),
-        "listened.video_id",
-        "ner.video_id",
-      );
+      .leftJoin("genre_prediction as gp", "v.id", "gp.video_id");
 
     if (endDate) {
       query = query.where("listened_at", "<=", endDate);
@@ -85,15 +68,26 @@ export class UserQueries {
   static async getTopMusic(user_id: number, startDate?: Date, endDate?: Date, limit?: number, offset?: number) {
     const db = DatabaseManager.getInstance();
     let query = UserQueries.getListenedAll(user_id, startDate, endDate);
+    // correlated per video: aggregating ner_prediction as a joined subquery scans the whole table per row
+    const nerResult = sql`(
+      select jsonb_object_agg(entity_type, entity_values)
+      from (
+        select entity_type, jsonb_agg(entity_value) as entity_values
+        from ner_prediction
+        where video_id = "v"."id"
+        group by entity_type
+      ) as inner_agg
+    )`;
+
     query = query
-      .groupBy(["v.yt_id", "video_metadata.title", "c.name", "c.yt_id", "c.profile_picture_uri", "ner.ner_result"])
+      .groupBy(["v.id", "v.yt_id", "video_metadata.title", "c.name", "c.yt_id", "c.profile_picture_uri"])
       .select(eb => [
         eb.ref("v.yt_id").as("video_id"),
         eb.ref("video_metadata.title").as("video_title"),
         eb.ref("c.name").as("artist_name"),
         eb.ref("c.yt_id").as("artist_id"),
         eb.ref("c.profile_picture_uri").as("artist_profile_picture_url"),
-        eb.ref("ner.ner_result").as("NER"),
+        nerResult.as("NER"),
         db.fn.count<number>(sql.ref("listened.listened_at")).distinct().as("listen_count"),
       ])
       .orderBy("listen_count", "desc")
