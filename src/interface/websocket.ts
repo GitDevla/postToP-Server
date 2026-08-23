@@ -38,10 +38,12 @@ export interface ExtendedWebSocketConnection extends WebSocket {
   authenticated: boolean;
   disconnectTimeout?: NodeJS.Timeout;
   idleTimeout?: NodeJS.Timeout;
-  currentlyPlayingData?: {
-    video: VideoResponseData;
-    listeningData: ListeningData;
-  };
+  currentlyPlayingData?: CurrentlyPlaying;
+}
+
+export interface CurrentlyPlaying {
+  video: VideoResponseData;
+  listeningData: ListeningData;
 }
 
 // biome-ignore lint/complexity/noBannedTypes: <explanation> Using Object type for WebsocketData to allow extension </explanation>

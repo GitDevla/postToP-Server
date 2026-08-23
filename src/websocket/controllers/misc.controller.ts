@@ -2,7 +2,7 @@ import {WebSocket} from "ws";
 import {UserQueries} from "../../database/queries/user.queries";
 import {type ExtendedWebSocketConnection, ResponseOperationType, WebSocketPhase} from "../../interface/websocket";
 import {logger} from "../../utils/logger";
-import {findAuthenticatedConnection, wssServer} from "..";
+import {findNowPlaying, wssServer} from "..";
 
 export function heartbeatWebsocketHandler(ws: ExtendedWebSocketConnection, _data: any) {
   if (!ws.authenticated || ws.userId === undefined) {
@@ -22,30 +22,22 @@ export function heartbeatWebsocketHandler(ws: ExtendedWebSocketConnection, _data
   );
 }
 
+// The user's own is_music submission never leaves the connection that made it
+function nowPlayingPayload(userID: number) {
+  const playing = findNowPlaying(userID);
+  if (!playing) return {userId: userID, video: null, listeningData: null};
+  const {isMusic, ...video} = playing.video;
+  return {
+    userId: userID,
+    video: {...video, isMusic: {...isMusic, user_submission: null}},
+    listeningData: playing.listeningData,
+  };
+}
+
 // TODO: Replace this with some kind of event system or pub/sub pattern
 // but this is fine for now
 export function announceSongToEvedroppers(userID: number) {
-  const originalWS = findAuthenticatedConnection(userID);
-
-  let data;
-  if (
-    originalWS === undefined ||
-    originalWS.currentlyPlayingData === undefined ||
-    originalWS.currentlyPlayingData.video.isMusic === undefined ||
-    originalWS.currentlyPlayingData.video.isMusic.is_music === false
-  ) {
-    data = {
-      userId: userID,
-      video: null,
-      listeningData: null,
-    };
-  } else {
-    data = {
-      userId: userID,
-      video: originalWS.currentlyPlayingData.video,
-      listeningData: originalWS.currentlyPlayingData.listeningData,
-    };
-  }
+  const data = nowPlayingPayload(userID);
 
   for (const client of wssServer.clients) {
     if (client.readyState !== WebSocket.OPEN) continue;
@@ -86,21 +78,10 @@ export async function eavesdropWebsocketHandler(ws: ExtendedWebSocketConnection,
       d: {message: "Eavesdropping started"},
     }),
   );
-  const originalWS = findAuthenticatedConnection(ws.userId);
-  if (!originalWS?.currentlyPlayingData) return;
-  if (
-    originalWS.currentlyPlayingData.video.isMusic === undefined ||
-    originalWS.currentlyPlayingData.video.isMusic.is_music === false
-  )
-    return;
   ws.send(
     JSON.stringify({
       op: ResponseOperationType.VIDEO_UPDATE,
-      d: {
-        userId: ws.userId,
-        video: originalWS.currentlyPlayingData.video,
-        listeningData: originalWS.currentlyPlayingData.listeningData,
-      },
+      d: nowPlayingPayload(ws.userId),
     }),
   );
   logger.info(`User ${ws.userId} started eavesdropping`);

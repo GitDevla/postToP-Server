@@ -215,9 +215,6 @@ async function startedListeningToMusicWebsocketHandler(ws: ExtendedWebSocketConn
     return;
   }
 
-  // remove sensitive data before sending to eavesdroppers
-  responseVideo.isMusic.user_submission = null;
-
   announceSongToEvedroppers(ws.userId);
 }
 

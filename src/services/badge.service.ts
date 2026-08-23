@@ -1,7 +1,5 @@
-import {type ExtendedWebSocketConnection, VideoStatus} from "../interface/websocket";
+import {type CurrentlyPlaying, VideoStatus} from "../interface/websocket";
 import {logger} from "../utils/logger";
-
-type CurrentlyPlaying = NonNullable<ExtendedWebSocketConnection["currentlyPlayingData"]>;
 
 const WIDTH = 420;
 const HEIGHT = 128;
@@ -25,12 +23,12 @@ const STYLES = `
 `;
 
 export class BadgeService {
-  static async renderNowPlaying(playing: CurrentlyPlaying | undefined) {
-    return playing ? await renderTrack(playing) : renderEmpty();
+  static async renderNowPlaying(playing: CurrentlyPlaying | undefined, transparent = false) {
+    return playing ? await renderTrack(playing, transparent) : renderEmpty(transparent);
   }
 }
 
-async function renderTrack({video, listeningData}: CurrentlyPlaying) {
+async function renderTrack({video, listeningData}: CurrentlyPlaying, transparent: boolean) {
   const isPaused = listeningData.status === VideoStatus.PAUSED;
   const elapsed = elapsedSeconds(listeningData, video.duration);
   const remaining = Math.max(0, video.duration - elapsed);
@@ -42,6 +40,7 @@ async function renderTrack({video, listeningData}: CurrentlyPlaying) {
   const animated = isRunning(listeningData) && remaining > 0;
 
   return card(`
+    ${backdrop(transparent)}
     <clipPath id="cover"><rect x="12" y="12" width="${COVER_SIZE}" height="${COVER_SIZE}" rx="8"/></clipPath>
     <rect x="12" y="12" width="${COVER_SIZE}" height="${COVER_SIZE}" rx="8" fill="#1B212A"/>
     ${cover ? `<image xlink:href="${cover}" x="12" y="12" width="${COVER_SIZE}" height="${COVER_SIZE}" preserveAspectRatio="xMidYMid slice" clip-path="url(#cover)"/>` : ""}
@@ -64,17 +63,23 @@ async function renderTrack({video, listeningData}: CurrentlyPlaying) {
   `);
 }
 
-function renderEmpty() {
+function renderEmpty(transparent: boolean) {
   return card(`
+    ${backdrop(transparent)}
     <circle cx="${WIDTH / 2 - 78}" cy="${HEIGHT / 2 - 4}" r="3" fill="#5F6B7A"/>
     <text class="empty" x="${WIDTH / 2 + 6}" y="${HEIGHT / 2}" text-anchor="middle">Not listening to anything</text>
   `);
 }
 
+function backdrop(transparent: boolean) {
+  return transparent
+    ? ""
+    : `<rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${HEIGHT - 1}" rx="12" fill="#151A21" stroke="#232A35"/>`;
+}
+
 function card(body: string) {
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img">
   <style>${STYLES}</style>
-  <rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${HEIGHT - 1}" rx="12" fill="#151A21" stroke="#232A35"/>
   ${body}
 </svg>`;
 }

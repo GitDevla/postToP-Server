@@ -1,15 +1,21 @@
 import type {IncomingMessage, Server} from "node:http";
-import {type RawData, type WebSocket, WebSocketServer} from "ws";
+import {type RawData, WebSocket, WebSocketServer} from "ws";
 import {
+  type CurrentlyPlaying,
   type ExtendedWebSocketConnection,
   RequestOperationType,
   ResponseOperationType,
+  VideoStatus,
   WebSocketPhase,
   type WebSocketRequest,
 } from "../interface/websocket";
 import {logger} from "../utils/logger";
 import {authWebsocketHandler} from "./controllers/auth.controller";
-import {eavesdropWebsocketHandler, heartbeatWebsocketHandler} from "./controllers/misc.controller";
+import {
+  announceSongToEvedroppers,
+  eavesdropWebsocketHandler,
+  heartbeatWebsocketHandler,
+} from "./controllers/misc.controller";
 import {videoUpdateWebsocketHandler} from "./controllers/music.controller";
 
 export let wssServer: WebSocketServer;
@@ -45,7 +51,7 @@ function websocketConnectionHandler(ws: ExtendedWebSocketConnection, _req: Incom
   ws.userId = undefined;
   ws.on("message", m => webSocketMessageHandler(ws, m));
   ws.on("error", webSocketErrorHandler);
-  ws.on("close", webSocketCloseHandler);
+  ws.on("close", () => webSocketCloseHandler(ws));
 }
 
 async function webSocketMessageHandler(ws: ExtendedWebSocketConnection, message: RawData) {
@@ -96,6 +102,9 @@ function webSocketErrorHandler(error: Error) {
 }
 
 function webSocketCloseHandler(ws: ExtendedWebSocketConnection) {
+  clearTimeout(ws.disconnectTimeout);
+  clearTimeout(ws.idleTimeout);
+  if (ws.authenticated && ws.userId !== undefined) announceSongToEvedroppers(ws.userId);
   logger.info(`WebSocket connection closed for userId: ${ws.userId}`);
 }
 
@@ -107,9 +116,25 @@ export function addWebsocketUpgradeHandler(server: Server, wss: WebSocketServer)
   });
 }
 
-export function findAuthenticatedConnection(userId: number) {
-  return Array.from(wssServer.clients).find(client => {
+export function findNowPlaying(userId: number): CurrentlyPlaying | undefined {
+  let best: CurrentlyPlaying | undefined;
+  for (const client of wssServer.clients) {
     const eClient = client as ExtendedWebSocketConnection;
-    return eClient.userId === userId && eClient.phase === WebSocketPhase.CONNECTED && eClient.authenticated;
-  }) as ExtendedWebSocketConnection | undefined;
+    if (eClient.readyState !== WebSocket.OPEN) continue;
+    if (eClient.userId !== userId) continue;
+    if (eClient.phase !== WebSocketPhase.CONNECTED || !eClient.authenticated) continue;
+    const playing = eClient.currentlyPlayingData;
+    if (!playing?.video.isMusic?.is_music) continue;
+    if (best === undefined || outranks(playing, best)) best = playing;
+  }
+  return best;
+}
+
+function outranks(candidate: CurrentlyPlaying, current: CurrentlyPlaying) {
+  if (isRunning(candidate) !== isRunning(current)) return isRunning(candidate);
+  return new Date(candidate.listeningData.updatedAt) > new Date(current.listeningData.updatedAt);
+}
+
+function isRunning({listeningData}: CurrentlyPlaying) {
+  return listeningData.status === VideoStatus.PLAYING || listeningData.status === VideoStatus.STARTED;
 }
